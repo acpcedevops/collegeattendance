@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Attendance — Mobile Fit (No ID, Buttons Bottom, Exclusive Lecture)</title>
+<style>
+  :root{
+    --bg: #f7fafc;
+    --card: #ffffff;
+    --border: rgba(0,0,0,0.08);
+    --accent: #0ea5e9;
+  }
+
+  body{
+    margin: 12px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    background: var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .card{
+    max-width: 1100px;
+    margin: 0 auto;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 20px rgba(2,6,23,0.04);
+  }
+
+  h1{ margin:0 0 12px; font-size:18px; font-weight:700; }
+
+  /* Header row: Subject, Lecture, Date (no ID) */
+  .form {
+    display:flex;
+    gap:12px;
+    align-items:center;
+    margin-bottom:12px;
+    flex-wrap:wrap;
+  }
+  .form .group { display:flex; gap:8px; align-items:center; min-width:0; }
+  label { font-weight:600; color:#111827; font-size:14px; }
+  select, input[type="date"]{
+    padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; background:white; min-width:0;
+    font-size:14px;
+  }
+
+  /* Controls (moved to bottom) */
+  .controls-bottom { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; flex-wrap:wrap; }
+  .controls-bottom button{ padding:8px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:white; font-weight:700; cursor:pointer; font-size:14px; }
+  .controls-bottom button.primary { background:var(--accent); color:white; border:none; box-shadow:0 6px 12px rgba(14,165,233,0.15); }
+
+  .hint { font-size:12px; color:#374151; margin-top:8px; }
+
+  /* GRID MOBILE-FIT */
+  .grid-wrapper { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  .grid-10x10 {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(48px, 1fr));
+    grid-auto-rows: minmax(64px, auto);
+    gap: 10px;
+    align-items: start;
+    padding: 10px;
+    box-sizing: border-box;
+    background: #fafafa;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.03);
+  }
+
+  .cell {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    padding: 8px 6px;
+    background: white;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.04);
+    min-height: 72px;
+  }
+
+  .cell .num {
+    font-weight:700;
+    font-size:15px;
+    margin-bottom:8px;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .cell .cb input[type="checkbox"]{
+    transform: scale(1.16);
+    cursor:pointer;
+  }
+
+  #result { margin-top:12px; font-weight:700; white-space:pre-wrap; word-break:break-word; font-size:13px; }
+
+  /* MOBILE-FIT TUNING (<=400px) */
+  @media (max-width: 400px) {
+    .card { padding: 12px; }
+    h1 { font-size:16px; }
+    label { font-size:13px; }
+    select, input[type="date"]{ font-size:13px; padding:6px 8px; }
+
+    .grid-10x10 {
+      grid-template-columns: repeat(10, 1fr); /* 10 equal columns fill viewport */
+      gap: 6px;
+      padding: 6px;
+    }
+    .cell {
+      padding: 4px 2px;
+      min-height: 50px;
+      border-radius:8px;
+    }
+    .cell .num { font-size:12px; margin-bottom:4px; }
+    .cell .cb input[type="checkbox"]{ transform: scale(0.95); }
+    .controls-bottom button { padding:6px 10px; font-size:13px; }
+    .hint { font-size:11px; }
+  }
+
+  /* Desktop: larger feel */
+  @media (min-width: 900px) {
+    .card { padding: 24px; }
+    .grid-10x10 { grid-auto-rows: minmax(82px, auto); gap: 14px; padding: 14px; }
+    .cell { padding:12px 8px; min-height:88px; }
+    .cell .num { font-size:16px; }
+    .controls-bottom button { padding:8px 14px; font-size:15px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card" role="main">
+  <h1>Attendance — Mobile Fit (No ID, Buttons Bottom, Exclusive Lecture)</h1>
+
+  <div class="form" aria-label="Attendance header">
+    <div class="group" style="min-width:140px;">
+      <label for="subject">Subject</label>
+      <select id="subject" aria-label="Subject">
+        <option value="cn">CN</option>
+        <option value="os">OS</option>
+        <option value="bc">Block Chain</option>
+      </select>
+    </div>
+
+    <div class="group" aria-label="Lecture">
+      <label>Lecture</label>
+      <label><input type="checkbox" id="regular" checked> Regular</label>
+      <label><input type="checkbox" id="extra"> Extra</label>
+    </div>
+
+    <div class="group">
+      <label for="date">Date</label>
+      <input id="date" type="date" aria-label="Date">
+    </div>
+  </div>
+
+  <div class="grid-wrapper" aria-hidden="false">
+    <div id="grid" class="grid-10x10" role="grid" aria-label="Roll numbers grid"></div>
+  </div>
+
+  <div class="hint">Tap a number to toggle its checkbox. At small widths (400px) all 10 columns fit the screen exactly.</div>
+
+  <!-- Buttons at the bottom -->
+  <div class="controls-bottom" role="toolbar" aria-label="Controls">
+    <button id="clearBtn">Clear</button>
+    <button id="invertBtn">Invert</button>
+    <button id="submitBtn" class="primary">Submit</button>
+  </div>
+
+  <div id="result" aria-live="polite"></div>
+</div>
+
+<script>
+  // default date
+  document.getElementById('date').valueAsDate = new Date();
+
+  // Make Regular & Extra mutually exclusive (Option 1)
+  const reg = document.getElementById("regular");
+  const ext = document.getElementById("extra");
+
+  reg.addEventListener("change", () => {
+    if (reg.checked) ext.checked = false;
+  });
+
+  ext.addEventListener("change", () => {
+    if (ext.checked) reg.checked = false;
+  });
+
+  // render 1..100 into the single responsive grid (10x10)
+  const grid = document.getElementById('grid');
+  for(let i=1;i<=100;i++){
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.setAttribute('role','gridcell');
+    cell.dataset.roll = i;
+
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.textContent = i;
+
+    const cbwrap = document.createElement('div');
+    cbwrap.className = 'cb';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.roll = i;
+    cb.id = 'r' + i;
+
+    // clicking number toggles the checkbox
+    num.addEventListener('click', () => { cb.checked = !cb.checked; });
+
+    cbwrap.appendChild(cb);
+    cell.appendChild(num);
+    cell.appendChild(cbwrap);
+    grid.appendChild(cell);
+  }
+
+  // Controls logic
+  const clearBtn = document.getElementById('clearBtn');
+  const invertBtn = document.getElementById('invertBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const result = document.getElementById('result');
+
+  clearBtn.addEventListener('click', () => {
+    document.querySelectorAll('#grid input[type=checkbox]').forEach(cb => cb.checked = false);
+    result.textContent = 'All cleared (all 0).';
+  });
+
+  invertBtn.addEventListener('click', () => {
+    document.querySelectorAll('#grid input[type=checkbox]').forEach(cb => cb.checked = !cb.checked);
+    result.textContent = 'Selection inverted.';
+  });
+
+  submitBtn.addEventListener('click', () => {
+    const subject = document.getElementById('subject').value;
+    const regular = document.getElementById('regular').checked ? 1 : 0;
+    const extra = document.getElementById('extra').checked ? 1 : 0;
+    const date = document.getElementById('date').value;
+
+    // Build values 1..100 -> 1/0 (do NOT alter grid)
+    const values = [];
+    for(let i=1;i<=100;i++){
+      const cb = document.querySelector('#r' + i);
+      values.push(cb && cb.checked ? '1' : '0');
+    }
+
+    // CSV header: subject,date,regular,extra,r1,...r100 (no id)
+    const header = ['subject','date','regular','extra'].concat(Array.from({length:100},(_,i)=>`r${i+1}`)).join(',');
+    const row = [subject, date || '', regular, extra].concat(values).join(',');
+
+    const present = [];
+    for(let i=0;i<values.length;i++){
+      if(values[i] === '1') present.push(i+1);
+    }
+
+    result.innerHTML =
+      `Submitted — Subject: ${subject.toUpperCase()} | Date: ${date || '-'}\n` +
+      `Lecture - Regular:${regular} Extra:${extra}\n` +
+      `Present count: ${present.length} — Rolls: ${present.length ? present.join(', ') : '-'}\n\n` +
+      `CSV (header + row):\n${header}\n${row}`;
+
+    // copy CSV to clipboard (best-effort)
+    try { navigator.clipboard?.writeText(header + '\n' + row); result.innerHTML += '\n\nCSV copied to clipboard.'; }
+    catch(e){ /* ignore */ }
+  });
+
+  // keyboard accessibility
+  document.querySelectorAll('.cell').forEach(cell => {
+    cell.tabIndex = 0;
+    cell.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){
+        const cb = cell.querySelector('input[type=checkbox]');
+        if(cb){ cb.checked = !cb.checked; e.preventDefault(); }
+      }
+    });
+  });
+</script>
+</body>
+</html>
