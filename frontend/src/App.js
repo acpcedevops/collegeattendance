@@ -1,222 +1,265 @@
 import React, { useEffect, useMemo, useState } from "react";
-import "./App.css"; // keep your existing css (or merge styles)
+import "./App.css";
 
-const API_BASE = "http://localhost:4000"; // change if your backend URL differs
+const API = "http://localhost:4000";
+const MAX_ROLL = 80;
 
-export default function AttendaceForm({ onLogout }) {
-  // header state
-  const [subject, setSubject] = useState("cn");
-  const [lectureRegular, setLectureRegular] = useState(true);
-  const [lectureExtra, setLectureExtra] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+/* ================= MAIN APP ================= */
+export default function App() {
+  const [view, setView] = useState("login"); // login | attendance
+  const [showPwd, setShowPwd] = useState(false);
 
-  // grid state (present map: 1..100 -> boolean)
-  const initial = useMemo(() => {
-    const x = {};
-    for (let i = 1; i <= 100; i++) x[i] = false;
-    return x;
+  useEffect(() => {
+    if (localStorage.getItem("token")) setView("attendance");
   }, []);
 
-  const [presentMap, setPresentMap] = useState(initial);
+  return (
+    <div className="page-wrapper">
+      <div className="card">
 
-  // UI state
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null); // { type: 'success'|'error'|'info', text: '' }
+        {/* HEADER */}
+        <header className="top-header">
+          <div className="header-title">
+            {view === "attendance" ? "Attendance Dashboard" : "Attendance App"}
+          </div>
 
-  // ensure mutual exclusivity: if both true for some reason, keep the last-changed behavior implemented in handlers below
+          {view === "attendance" && (
+            <div>
+              <button className="hdr-btn" onClick={() => setShowPwd(true)}>
+                Change Password
+              </button>
+              <button
+                className="hdr-btn"
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </header>
 
-  // helpers to toggle roll
-  const toggleRoll = (n) => {
-    setPresentMap((p) => ({ ...p, [n]: !p[n] }));
-  };
+        {view === "login" && <LoginForm onSuccess={() => setView("attendance")} />}
+        {view === "attendance" && <AttendanceForm />}
 
-  const clearAll = () => {
-    setPresentMap(Object.fromEntries(Object.keys(initial).map((k) => [k, false])));
-    setMessage({ type: "info", text: "Cleared selections." });
-  };
+        {showPwd && <ChangePassword onClose={() => setShowPwd(false)} />}
+      </div>
+    </div>
+  );
+}
 
-  const invertAll = () => {
-    setPresentMap((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, !v])));
-    setMessage({ type: "info", text: "Inverted selections." });
-  };
+/* ================= LOGIN ================= */
+function LoginForm({ onSuccess }) {
+  const [username, setU] = useState("");
+  const [password, setP] = useState("");
+  const [err, setErr] = useState("");
 
-  // build presentMatrix as array of '0'/'1' strings length 100
-  const buildPresentMatrix = () => {
-    return Array.from({ length: 100 }, (_, i) => (presentMap[i + 1] ? "1" : "0"));
-  };
-
-  // Submit attendance to backend
-  const submit = async () => {
-    setMessage(null);
-
-    // check token
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setMessage({ type: "error", text: "Not logged in. Please login first." });
-      return;
-    }
-
-    // build payload
-    const presentMatrix = buildPresentMatrix();
-    const payload = {
-      subject,
-      date,
-      regular: lectureRegular ? 1 : 0,
-      extra: lectureExtra ? 1 : 0,
-      presentMatrix,
-    };
-
-    setLoading(true);
+  async function login() {
+    setErr("");
     try {
-      const res = await fetch(`${API_BASE}/api/attendance`, {
+      const res = await fetch(API + "/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const j = await res.json();
+      if (!res.ok) return setErr(j.error || "Login failed");
+
+      localStorage.setItem("token", j.token);
+      onSuccess();
+    } catch {
+      setErr("Network error");
+    }
+  }
+
+  return (
+    <div className="form-col">
+      <h3>Login</h3>
+      <input placeholder="Username" onChange={e => setU(e.target.value)} />
+      <input type="password" placeholder="Password" onChange={e => setP(e.target.value)} />
+      <button className="btn" onClick={login}>Login</button>
+      {err && <div className="msg error">{err}</div>}
+    </div>
+  );
+}
+
+/* ================= CHANGE PASSWORD ================= */
+function ChangePassword({ onClose }) {
+  const [oldP, setOld] = useState("");
+  const [newP, setNew] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function submit() {
+    setMsg("");
+    try {
+      const res = await fetch(API + "/api/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + token,
+          Authorization: "Bearer " + localStorage.getItem("token"),
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ oldPassword: oldP, newPassword: newP }),
+      });
+      const j = await res.json();
+      if (!res.ok) return setMsg(j.error || "Failed");
+
+      setMsg("Password updated. Please login again.");
+      setTimeout(() => {
+        localStorage.clear();
+        window.location.reload();
+      }, 1200);
+    } catch {
+      setMsg("Network error");
+    }
+  }
+
+  return (
+    <div className="modal">
+      <div className="modal-card">
+        <h3>Change Password</h3>
+        <input type="password" placeholder="Old Password" onChange={e => setOld(e.target.value)} />
+        <input type="password" placeholder="New Password" onChange={e => setNew(e.target.value)} />
+        <button className="btn" onClick={submit}>Update</button>
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        {msg && <div className="msg">{msg}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ================= ATTENDANCE ================= */
+function AttendanceForm() {
+  const initial = useMemo(() => {
+    const o = {};
+    for (let i = 1; i <= MAX_ROLL; i++) o[i] = false;
+    return o;
+  }, []);
+
+  const [map, setMap] = useState(initial);
+  const [subject, setSubject] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [regular, setRegular] = useState(true);
+  const [extra, setExtra] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = n => setMap(p => ({ ...p, [n]: !p[n] }));
+  const clearAll = () => setMap(initial);
+  const invertAll = () =>
+    setMap(p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, !v])));
+
+  async function submitAttendance() {
+    if (!subject.trim()) {
+      setMsg({ type: "error", text: "Please enter subject" });
+      return;
+    }
+
+    setLoading(true);
+    setMsg(null);
+
+    const presentMatrix = Array.from(
+      { length: MAX_ROLL },
+      (_, i) => (map[i + 1] ? "1" : "0")
+    );
+
+    try {
+      const res = await fetch(API + "/api/attendance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          subject,
+          date,
+          regular,
+          extra,
+          presentMatrix,
+        }),
       });
 
-      const json = await res.json().catch(() => ({}));
+      const j = await res.json();
       if (!res.ok) {
-        const err = json.error || json.detail || "Submit failed";
-        setMessage({ type: "error", text: err });
+        setMsg({ type: "error", text: j.error || j.detail || "Submit failed" });
       } else {
-        setMessage({ type: "success", text: "Attendance submitted successfully." });
+        setMsg({ type: "success", text: "✅ Attendance submitted successfully" });
+        setTimeout(() => setMsg(null), 3000);
       }
-    } catch (err) {
-      setMessage({ type: "error", text: "Network error or server not reachable." });
-      console.error("submit error", err);
+    } catch {
+      setMsg({ type: "error", text: "Network error" });
     } finally {
       setLoading(false);
     }
-  };
-
-  // keyboard accessibility: allow toggling with Enter/Space by focusing the number div
-  useEffect(() => {
-    // ensure each cell is focusable (done via tabIndex below)
-  }, []);
-
-  // simple count of present
-  const presentCount = Object.values(presentMap).filter(Boolean).length;
-
-  // Lecture checkbox handlers: keep mutually exclusive behavior (Option 1)
-  const onRegularChange = (checked) => {
-    setLectureRegular(checked);
-    if (checked) setLectureExtra(false);
-  };
-  const onExtraChange = (checked) => {
-    setLectureExtra(checked);
-    if (checked) setLectureRegular(false);
-  };
+  }
 
   return (
-    <div className="page">
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h1 style={{ margin: 0 }}>Attendance</h1>
-          <div>
-            {onLogout && <button onClick={() => { localStorage.removeItem("token"); onLogout(); }}>Logout</button>}
-          </div>
-        </div>
+    <>
+      {/* FORM ROW */}
+      <div className="form-row">
+        <label>
+          Subject
+          <input
+            type="text"
+            placeholder="Enter subject name"
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+          />
+        </label>
 
-        <div className="form" style={{ marginBottom: 12 }}>
-          <div className="group">
-            <label>Subject</label>
-            <select value={subject} onChange={(e) => setSubject(e.target.value)}>
-              <option value="cn">CN</option>
-              <option value="os">OS</option>
-              <option value="bc">Block Chain</option>
-            </select>
-          </div>
+        <label>
+          Date
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+        </label>
 
-          <div className="group lecture">
-            <label>Lecture</label>
+        <label className="lecture">
+          <input
+            type="checkbox"
+            checked={regular}
+            onChange={e => {
+              setRegular(e.target.checked);
+              if (e.target.checked) setExtra(false);
+            }}
+          />
+          Regular
+        </label>
 
-            <label className="inline" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={lectureRegular}
-                onChange={(e) => onRegularChange(e.target.checked)}
-              />
-              <span>Regular</span>
-            </label>
-
-            <label className="inline" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={lectureExtra}
-                onChange={(e) => onExtraChange(e.target.checked)}
-              />
-              <span>Extra</span>
-            </label>
-          </div>
-
-          <div className="group">
-            <label>Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid-wrapper">
-          <div className="grid-10x10" role="grid" aria-label="Roll numbers grid">
-            {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => (
-              <div
-                className="cell"
-                key={n}
-                role="gridcell"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    toggleRoll(n);
-                    e.preventDefault();
-                  }
-                }}
-              >
-                <div
-                  className="num"
-                  onClick={() => toggleRoll(n)}
-                  style={{ userSelect: "none" }}
-                >
-                  {n}
-                </div>
-                <div className="cb">
-                  <input
-                    id={"r" + n}
-                    type="checkbox"
-                    checked={!!presentMap[n]}
-                    onChange={() => toggleRoll(n)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="hint" style={{ marginTop: 10 }}>Tap a number to toggle its checkbox. On small widths (400px) all 10 columns fit.</div>
-
-        <div className="controls-bottom" style={{ marginTop: 12 }}>
-          <button onClick={clearAll} disabled={loading}>Clear</button>
-          <button onClick={invertAll} disabled={loading}>Invert</button>
-          <button className="primary" onClick={submit} disabled={loading}>
-            {loading ? "Submitting..." : `Submit (${presentCount})`}
-          </button>
-        </div>
-
-        {message && (
-          <div style={{
-            marginTop: 12,
-            padding: "8px 10px",
-            borderRadius: 8,
-            color: message.type === "error" ? "#7f1d1d" : (message.type === "success" ? "#064e3b" : "#0c4a6e"),
-            background: message.type === "error" ? "#fee2e2" : (message.type === "success" ? "#ecfdf5" : "#e6f0fa"),
-            border: message.type === "error" ? "1px solid #fecaca" : "1px solid rgba(0,0,0,0.06)"
-          }}>
-            {message.text}
-          </div>
-        )}
-
+        <label className="lecture">
+          <input
+            type="checkbox"
+            checked={extra}
+            onChange={e => {
+              setExtra(e.target.checked);
+              if (e.target.checked) setRegular(false);
+            }}
+          />
+          Extra
+        </label>
       </div>
-    </div>
+
+      {/* GRID */}
+      <div className="grid-wrapper">
+        <div className="grid-10x10">
+          {Array.from({ length: MAX_ROLL }, (_, i) => i + 1).map(n => (
+            <div key={n} className="cell" onClick={() => toggle(n)}>
+              <div className="num">{n}</div>
+              <input type="checkbox" checked={map[n]} readOnly />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CONTROLS */}
+      <div className="controls-bottom">
+        <button className="btn" onClick={clearAll}>Clear</button>
+        <button className="btn" onClick={invertAll}>Invert</button>
+        <button className="btn primary" onClick={submitAttendance} disabled={loading}>
+          {loading ? "Submitting..." : "Submit"}
+        </button>
+      </div>
+
+      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+    </>
   );
 }
